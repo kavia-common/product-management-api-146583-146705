@@ -2,6 +2,7 @@ from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from sqlalchemy.exc import IntegrityError, DataError
+from sqlalchemy import func
 from uuid import UUID
 
 from app.db import db, Product
@@ -10,6 +11,7 @@ from app.schemas import (
     ProductSchema,
     ProductUpdateSchema,
     ProductListSchema,
+    TotalBalanceSchema,
 )
 
 blp = Blueprint(
@@ -88,6 +90,18 @@ class ProductsList(MethodView):
             "next_page": page + 1 if page < total_pages else None,
         }
         return {"items": items, "meta": meta}
+
+
+@blp.route("/total_balance")
+class ProductsTotalBalance(MethodView):
+    @blp.response(200, TotalBalanceSchema)
+    def get(self):
+        """Returns the sum of price * quantity for all products in stock."""
+        # Compute sum(price * quantity) in the database for efficiency
+        result = db.session.query(func.coalesce(func.sum(Product.price * Product.quantity), 0.0)).scalar()
+        # Ensure float type for JSON serialization
+        total_balance = float(result or 0.0)
+        return {"total_balance": total_balance}
 
 
 @blp.route("/<string:product_id>")
